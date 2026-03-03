@@ -41,6 +41,7 @@ export function setCorsHeaders(
   requestId: string
 ): void {
   headers.set("x-xupastack-request-id", requestId);
+  headers.set("vary", "Origin");
 
   const origin = request.headers.get("origin");
   if (!origin) return;

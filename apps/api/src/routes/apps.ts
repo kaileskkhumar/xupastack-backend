@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { apps } from "../db/schema";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import type { Env } from "../env";
 import type { SessionUser } from "../auth/session";
 import { CreateAppSchema, UpdateAppSchema } from "@xupastack/shared";
@@ -64,6 +65,22 @@ function rowToApp(row: typeof apps.$inferSelect) {
   };
 }
 
+// ── KV rate limiter (reuses CONFIG_TOKENS namespace with rl: prefix) ──────────
+
+async function checkRateLimit(
+  kv: KVNamespace,
+  key: string,
+  max: number,
+  windowSeconds: number
+): Promise<boolean> {
+  const kvKey = `rl:${key}`;
+  const raw = await kv.get(kvKey);
+  const count = raw ? parseInt(raw, 10) : 0;
+  if (count >= max) return false;
+  await kv.put(kvKey, String(count + 1), { expirationTtl: windowSeconds });
+  return true;
+}
+
 // ── Static routes first (must come before /:id) ───────────────────────────────
 
 // GET /apps/slug-check?slug=...
@@ -95,6 +112,13 @@ router.get("/slug-check", async (c) => {
 // POST /apps
 router.post("/", async (c) => {
   const user = c.get("user");
+
+  // Rate limit: 10 app creations per user per hour
+  const allowed = await checkRateLimit(c.env.CONFIG_TOKENS, `app_create:${user.id}`, 10, 3600);
+  if (!allowed) {
+    return c.json({ error: "rate_limit_exceeded" }, 429);
+  }
+
   const body = await c.req.json().catch(() => null);
 
   const parsedApp = CreateAppSchema.safeParse(body);
@@ -201,6 +225,13 @@ router.get("/:id", async (c) => {
 // PUT /apps/:id
 router.put("/:id", async (c) => {
   const user = c.get("user");
+
+  // Rate limit: 30 config updates per user per hour
+  const allowed = await checkRateLimit(c.env.CONFIG_TOKENS, `app_update:${user.id}`, 30, 3600);
+  if (!allowed) {
+    return c.json({ error: "rate_limit_exceeded" }, 429);
+  }
+
   const body = await c.req.json().catch(() => null);
   const parsed = UpdateAppSchema.safeParse(body);
   if (!parsed.success) {

@@ -99,6 +99,7 @@ app.use("*", async (c, next) => {
   c.res.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   c.res.headers.set("x-content-type-options", "nosniff");
   c.res.headers.set("x-frame-options", "DENY");
+  c.res.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
 });
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
