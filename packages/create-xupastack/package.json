@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@xupastack/shared": "^0.1.0",
-    "commander": "^12.1.0",
+    "commander": "^14.0.3",
     "ora": "^8.0.1",
     "picocolors": "^1.0.1"
   },
