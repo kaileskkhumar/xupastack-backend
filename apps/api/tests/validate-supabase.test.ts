@@ -107,7 +107,7 @@ describe("probeSupabase", () => {
     );
     expect(result).toBe("ok");
     expect(mockFetch).toHaveBeenCalledOnce();
-    expect(mockFetch.mock.calls[0][0]).toContain("/auth/v1/health");
+    expect(mockFetch.mock.calls[0]![0]).toContain("/auth/v1/health");
   });
 
   it("returns ok when /auth/v1/health returns 401 (Supabase requires apikey)", async () => {

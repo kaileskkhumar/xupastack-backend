@@ -224,7 +224,7 @@ describe("gatewayUrl normalisation", () => {
       ["rest"],
       fn as unknown as typeof fetch
     );
-    expect(fn.mock.calls[0][0]).toBe(
+    expect(fn.mock.calls[0]![0]).toBe(
       "https://slug.gw.xupastack.com/auth/v1/health"
     );
   });
