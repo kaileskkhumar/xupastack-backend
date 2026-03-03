@@ -12,7 +12,7 @@ describe("CreateAppSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.enabledServices).toContain("rest");
-      expect(result.data.rateLimitPerMin).toBe(100);
+      expect(result.data.rateLimitPerMin).toBe(600);
     }
   });
 
