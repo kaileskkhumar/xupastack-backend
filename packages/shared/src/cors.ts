@@ -52,7 +52,10 @@ export function setCorsHeaders(
   if (!isAllowed) return;
 
   if (config.allowCredentials) {
-    // spec: when credentials=true, MUST NOT use wildcard
+    // spec: when credentials=true, MUST NOT use wildcard.
+    // If someone bypassed schema validation and has wildcard+credentials,
+    // refuse to set CORS headers rather than allow any origin with credentials.
+    if (isWildcard) return;
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
   } else {

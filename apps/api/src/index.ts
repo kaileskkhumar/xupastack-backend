@@ -1,5 +1,6 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import type { Env } from "./env";
+import { validateEnv } from "./env";
 import { getDb } from "./db/client";
 import {
   parseSessionCookie,
@@ -32,6 +33,25 @@ interface Variables {
 type AppEnv = { Bindings: Env; Variables: Variables };
 
 const app = new Hono<AppEnv>();
+
+// ── Sanitise redirect paths ────────────────────────────────────────────────────
+// Only allow relative paths: must start with "/" and must not be "//"
+// (protocol-relative URLs like "//evil.com" would bypass the origin check).
+
+function sanitizeRedirectPath(next: unknown): string {
+  if (typeof next !== "string") return "/";
+  const trimmed = next.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return "/";
+  return trimmed;
+}
+
+// ── Email format validation ────────────────────────────────────────────────────
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function isValidEmail(email: unknown): email is string {
+  return typeof email === "string" && EMAIL_REGEX.test(email) && email.length <= 254;
+}
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
@@ -72,6 +92,15 @@ function corsHeaders(
   return out;
 }
 
+// ── Security headers ──────────────────────────────────────────────────────────
+
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  c.res.headers.set("x-content-type-options", "nosniff");
+  c.res.headers.set("x-frame-options", "DENY");
+});
+
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
 const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -89,13 +118,21 @@ const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
-app.get("/health", (c) =>
-  c.json({ ok: true, ts: new Date().toISOString() })
-);
+app.get("/health", (c) => {
+  // Validate required secrets are present — fail fast with a clear message
+  // rather than a cryptic runtime error on first real request.
+  try {
+    validateEnv(c.env);
+  } catch (err) {
+    console.error("[health] env validation failed:", err);
+    return c.json({ ok: false, error: "misconfigured" }, 503);
+  }
+  return c.json({ ok: true, ts: new Date().toISOString() });
+});
 
 // ── Public: probe Supabase reachability from Cloudflare Workers edge ──────────
 // Used by the landing page "Test if you're affected" widget.
-// No auth required — rate-limit is handled by Cloudflare.
+// No auth required — rate-limit is handled by Cloudflare WAF rules.
 
 app.post("/public/probe-supabase", async (c) => {
   const body = await c.req.json().catch(() => null) as { url?: string } | null;
@@ -148,7 +185,7 @@ app.post("/auth/logout", requireAuth, async (c) => {
 // ── GitHub OAuth ──────────────────────────────────────────────────────────────
 
 app.get("/auth/github/start", async (c) => {
-  const next = c.req.query("next") ?? "/";
+  const next = sanitizeRedirectPath(c.req.query("next"));
   const { url } = await buildGithubAuthUrl(
     c.env.GITHUB_CLIENT_ID,
     next,
@@ -183,6 +220,8 @@ app.get("/auth/github/callback", async (c) => {
     const userId = await upsertGithubUser(db, ghUser);
     const sessionId = await createSession(db, userId);
 
+    // `next` was stored in KV via buildGithubAuthUrl which called sanitizeRedirectPath
+    // at the start of /auth/github/start, so it is already sanitised.
     return new Response(null, {
       status: 302,
       headers: {
@@ -200,12 +239,12 @@ app.get("/auth/github/callback", async (c) => {
 
 app.post("/auth/email/start", async (c) => {
   const body = await c.req.json().catch(() => null) as {
-    email?: string;
-    next?: string;
+    email?: unknown;
+    next?: unknown;
   } | null;
 
-  if (!body?.email || typeof body.email !== "string") {
-    return c.json({ error: "missing_email" }, 400);
+  if (!isValidEmail(body?.email)) {
+    return c.json({ error: "invalid_email" }, 400);
   }
 
   const ip =
@@ -213,11 +252,12 @@ app.post("/auth/email/start", async (c) => {
     c.req.header("x-forwarded-for") ??
     "unknown";
   const userAgent = c.req.header("user-agent") ?? "";
-  const nextPath = body.next ?? "/";
+  const nextPath = sanitizeRedirectPath(body?.next);
   const db = getDb(c.env.DB);
 
   const result = await startMagicLink({
     db,
+    rateLimitKv: c.env.CONFIG_TOKENS,
     email: body.email,
     ip,
     userAgent,
@@ -228,7 +268,7 @@ app.post("/auth/email/start", async (c) => {
   });
 
   if ("error" in result) {
-    return c.json({ error: result.error }, result.status as 400 | 429);
+    return c.json({ error: result.error }, result.status as 400 | 429 | 500);
   }
 
   return c.json({ ok: true });
@@ -236,7 +276,7 @@ app.post("/auth/email/start", async (c) => {
 
 app.get("/auth/email/callback", async (c) => {
   const rawToken = c.req.query("token");
-  const next = c.req.query("next") ?? "/";
+  // next in the URL is informational only — the authoritative nextPath is in the DB
   const consoleOrigin = c.env.CONSOLE_ORIGIN;
 
   if (!rawToken) {
@@ -253,10 +293,14 @@ app.get("/auth/email/callback", async (c) => {
   const userId = await upsertEmailUser(db, result.email);
   const sessionId = await createSession(db, userId);
 
+  // nextPath comes from DB (stored at magic-link creation time after sanitisation)
+  const safePath = sanitizeRedirectPath(result.nextPath);
+
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${consoleOrigin}${result.nextPath}`,
+      // Referrer-Policy is set by the global security-headers middleware above.
+      Location: `${consoleOrigin}${safePath}`,
       "Set-Cookie": buildSessionCookie(sessionId),
     },
   });

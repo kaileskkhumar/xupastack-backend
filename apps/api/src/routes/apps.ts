@@ -31,6 +31,14 @@ function computeGatewayUrl(row: typeof apps.$inferSelect): string | null {
   return row.mode === "managed" ? row.proxyUrl : row.selfhostGatewayUrl;
 }
 
+function safeJsonParse<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 function rowToApp(row: typeof apps.$inferSelect) {
   return {
     id: row.id,
@@ -43,9 +51,9 @@ function rowToApp(row: typeof apps.$inferSelect) {
     upstreamHost: row.upstreamHost,
     upstreamUrl: row.upstreamHost,
     gatewayUrl: computeGatewayUrl(row),
-    allowedOrigins: JSON.parse(row.allowedOriginsJson) as string[],
+    allowedOrigins: safeJsonParse<string[]>(row.allowedOriginsJson, []),
     allowCredentials: Boolean(row.allowCredentials),
-    enabledServices: JSON.parse(row.enabledServicesJson) as string[],
+    enabledServices: safeJsonParse<string[]>(row.enabledServicesJson, []),
     rateLimitPerMin: row.rateLimitPerMin,
     strictMode: Boolean(row.strictMode),
     rewriteLocationHeaders: Boolean(row.rewriteLocationHeaders),
@@ -329,7 +337,7 @@ router.post("/:id/diagnostics", async (c) => {
     });
   }
 
-  const enabledServices = JSON.parse(app.enabledServicesJson) as string[];
+  const enabledServices = safeJsonParse<string[]>(app.enabledServicesJson, []);
   const result = await runDiagnostics(gatewayUrl, enabledServices);
   return c.json(result);
 });

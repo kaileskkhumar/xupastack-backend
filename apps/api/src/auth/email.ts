@@ -1,6 +1,7 @@
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { emailMagicLinks, users } from "../db/schema";
 import type { Db } from "../db/client";
+import type { KVNamespace } from "@cloudflare/workers-types";
 import {
   generateToken,
   sha256Hex,
@@ -10,25 +11,27 @@ import {
 
 const TOKEN_TTL_SECONDS = 15 * 60; // 15 min
 
-// Simple in-memory rate limit: max 3 links per email/IP per 5 min
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string, maxPerWindow = 3): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-
-  if (!entry || entry.resetAt < now) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + 5 * 60 * 1000 });
-    return true; // ok
-  }
-
-  if (entry.count >= maxPerWindow) return false; // limited
-  entry.count++;
+// KV-backed rate limiter: shared across all Worker isolates.
+// Uses CONFIG_TOKENS KV with an "rl:" prefix to avoid new infrastructure.
+async function checkRateLimitKv(
+  kv: KVNamespace,
+  key: string,
+  max: number,
+  windowSeconds: number
+): Promise<boolean> {
+  const kvKey = `rl:${key}`;
+  const raw = await kv.get(kvKey);
+  const count = raw ? parseInt(raw, 10) : 0;
+  if (count >= max) return false;
+  // Increment with a sliding expiry — not perfectly atomic but far better than
+  // in-memory which resets on every isolate restart or multi-region request.
+  await kv.put(kvKey, String(count + 1), { expirationTtl: windowSeconds });
   return true;
 }
 
 export interface StartMagicLinkOpts {
   db: Db;
+  rateLimitKv: KVNamespace;
   email: string;
   ip: string;
   userAgent: string;
@@ -41,11 +44,15 @@ export interface StartMagicLinkOpts {
 export async function startMagicLink(
   opts: StartMagicLinkOpts
 ): Promise<{ ok: true } | { error: string; status: number }> {
-  const { db, email, ip, userAgent, nextPath, apiBaseUrl, emailProviderKey, emailFrom } =
+  const { db, rateLimitKv, email, ip, userAgent, nextPath, apiBaseUrl, emailProviderKey, emailFrom } =
     opts;
 
-  // Rate limit by IP and email
-  if (!checkRateLimit(`ip:${ip}`) || !checkRateLimit(`email:${email}`)) {
+  // Rate limit by email (3 per 5 min) and IP (10 per 5 min)
+  const [emailOk, ipOk] = await Promise.all([
+    checkRateLimitKv(rateLimitKv, `email:${email}`, 3, 5 * 60),
+    checkRateLimitKv(rateLimitKv, `ip:${ip}`, 10, 5 * 60),
+  ]);
+  if (!emailOk || !ipOk) {
     return { error: "rate_limit_exceeded", status: 429 };
   }
 
@@ -53,15 +60,23 @@ export async function startMagicLink(
   const tokenHash = await sha256Hex(rawToken);
   const expiresAt = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
 
-  await db.insert(emailMagicLinks).values({
-    email: email.toLowerCase().trim(),
-    tokenHash,
-    expiresAt,
-    ip,
-    userAgent,
-    nextPath,
-  });
+  const inserted = await db
+    .insert(emailMagicLinks)
+    .values({
+      email: email.toLowerCase().trim(),
+      tokenHash,
+      expiresAt,
+      ip,
+      userAgent,
+      nextPath,
+    })
+    .returning({ id: emailMagicLinks.id });
 
+  const linkId = inserted[0]?.id;
+
+  // Build the magic link URL. The token is in the URL, so we add
+  // Referrer-Policy: strict-origin-when-cross-origin on the callback response
+  // to prevent the token leaking via the Referer header.
   const magicLinkUrl =
     `${apiBaseUrl}/auth/email/callback` +
     `?token=${encodeURIComponent(rawToken)}` +
@@ -70,13 +85,25 @@ export async function startMagicLink(
   const { html, text } = buildMagicLinkEmail(magicLinkUrl);
   const provider = new ResendEmailProvider(emailProviderKey);
 
-  await provider.send({
-    to: email,
-    from: emailFrom,
-    subject: "Sign in to XupaStack",
-    html,
-    text,
-  });
+  try {
+    await provider.send({
+      to: email,
+      from: emailFrom,
+      subject: "Sign in to XupaStack",
+      html,
+      text,
+    });
+  } catch (err) {
+    console.error("[magic-link] email send failed:", err);
+    // Burn the token so it can never be used — the user must request a new one.
+    if (linkId) {
+      await db
+        .update(emailMagicLinks)
+        .set({ usedAt: Math.floor(Date.now() / 1000) })
+        .where(eq(emailMagicLinks.id, linkId));
+    }
+    return { error: "email_send_failed", status: 500 };
+  }
 
   return { ok: true };
 }

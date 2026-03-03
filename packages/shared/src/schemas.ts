@@ -23,7 +23,13 @@ export const GatewayConfigSchema = z.object({
 });
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema>;
 
-export const CreateAppSchema = z.object({
+const CORS_WILDCARD_WITH_CREDENTIALS_MSG =
+  "allowCredentials cannot be true when allowedOrigins includes '*' — " +
+  "this violates the CORS spec and allows any origin to make credentialed requests";
+
+// Base object schema — used as the foundation for Create, Update, and App schemas.
+// Keep .refine() off the base so that .partial() and .extend() remain callable.
+const CreateAppBaseSchema = z.object({
   name: z.string().min(1).max(64),
   slug: z
     .string()
@@ -41,14 +47,28 @@ export const CreateAppSchema = z.object({
   strictMode: z.boolean().default(false),
   rewriteLocationHeaders: z.boolean().default(true),
 });
+
+export const CreateAppSchema = CreateAppBaseSchema.refine(
+  (d) => !(d.allowedOrigins.includes("*") && d.allowCredentials),
+  { message: CORS_WILDCARD_WITH_CREDENTIALS_MSG, path: ["allowCredentials"] }
+);
 export type CreateApp = z.infer<typeof CreateAppSchema>;
 
-export const UpdateAppSchema = CreateAppSchema.partial().extend({
-  selfhostGatewayUrl: z.string().url("selfhostGatewayUrl must be a valid URL").nullable().optional(),
-});
+export const UpdateAppSchema = CreateAppBaseSchema.partial()
+  .extend({
+    selfhostGatewayUrl: z
+      .string()
+      .url("selfhostGatewayUrl must be a valid URL")
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (d) => !(d.allowedOrigins?.includes("*") && d.allowCredentials),
+    { message: CORS_WILDCARD_WITH_CREDENTIALS_MSG, path: ["allowCredentials"] }
+  );
 export type UpdateApp = z.infer<typeof UpdateAppSchema>;
 
-export const AppSchema = CreateAppSchema.extend({
+export const AppSchema = CreateAppBaseSchema.extend({
   id: z.string(),
   userId: z.string(),
   status: z.enum(["active", "disabled"]).default("active"),

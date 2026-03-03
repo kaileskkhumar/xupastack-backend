@@ -66,7 +66,11 @@ describe("CORS handling", () => {
     expect(resp.headers.get("access-control-allow-origin")).toBe("*");
   });
 
-  it("reflects exact origin when allowedOrigins=['*'] and allowCredentials=true", () => {
+  it("blocks CORS entirely when allowedOrigins=['*'] and allowCredentials=true (spec violation guard)", () => {
+    // Combining wildcard origins with allowCredentials:true violates the CORS spec —
+    // it would allow any site to make credentialed requests to the user's Supabase data.
+    // Even if this misconfiguration somehow reaches the gateway, cors.ts must refuse to
+    // echo any origin with credentials rather than silently enabling the attack.
     const config = { ...baseConfig, allowedOrigins: ["*"], allowCredentials: true };
     const resp = applyCors(
       new Response("ok"),
@@ -74,8 +78,8 @@ describe("CORS handling", () => {
       config,
       "req-id"
     );
-    expect(resp.headers.get("access-control-allow-origin")).toBe("https://any-origin.com");
-    expect(resp.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(resp.headers.get("access-control-allow-origin")).toBeNull();
+    expect(resp.headers.get("access-control-allow-credentials")).toBeNull();
   });
 
   it("sets preflight headers on OPTIONS", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CreateAppSchema } from "@xupastack/shared";
+import { CreateAppSchema, UpdateAppSchema } from "@xupastack/shared";
 
 describe("CreateAppSchema", () => {
   it("accepts valid app creation payload", () => {
@@ -38,6 +38,49 @@ describe("CreateAppSchema", () => {
       name: "Bad Host",
       slug: "bad-host",
       upstreamHost: "not-a-url",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects wildcard allowedOrigins combined with allowCredentials:true", () => {
+    const result = CreateAppSchema.safeParse({
+      name: "Bad CORS",
+      slug: "bad-cors",
+      upstreamHost: "https://xyz.supabase.co",
+      allowedOrigins: ["*"],
+      allowCredentials: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts allowCredentials:true with specific origins", () => {
+    const result = CreateAppSchema.safeParse({
+      name: "Good CORS",
+      slug: "good-cors",
+      upstreamHost: "https://xyz.supabase.co",
+      allowedOrigins: ["https://myapp.com"],
+      allowCredentials: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts wildcard allowedOrigins when allowCredentials is false", () => {
+    const result = CreateAppSchema.safeParse({
+      name: "Open CORS",
+      slug: "open-cors",
+      upstreamHost: "https://xyz.supabase.co",
+      allowedOrigins: ["*"],
+      allowCredentials: false,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("UpdateAppSchema", () => {
+  it("rejects wildcard allowedOrigins combined with allowCredentials:true", () => {
+    const result = UpdateAppSchema.safeParse({
+      allowedOrigins: ["*"],
+      allowCredentials: true,
     });
     expect(result.success).toBe(false);
   });

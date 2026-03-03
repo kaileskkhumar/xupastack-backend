@@ -55,11 +55,26 @@ export async function getAppConfig(
 
   if (!result) return null;
 
+  let allowedOrigins: string[];
+  let enabledServices: GatewayConfig["enabledServices"];
+  try {
+    allowedOrigins = JSON.parse(result.allowed_origins_json) as string[];
+  } catch {
+    console.warn(`[config-cache] failed to parse allowed_origins_json for slug "${slug}" — defaulting to []`);
+    allowedOrigins = [];
+  }
+  try {
+    enabledServices = JSON.parse(result.enabled_services_json) as GatewayConfig["enabledServices"];
+  } catch {
+    console.warn(`[config-cache] failed to parse enabled_services_json for slug "${slug}" — defaulting to all services`);
+    enabledServices = ["rest", "auth", "storage", "functions", "graphql", "realtime"];
+  }
+
   const config: GatewayConfig = {
     upstreamHost: result.upstream_host,
-    allowedOrigins: JSON.parse(result.allowed_origins_json) as string[],
+    allowedOrigins,
     allowCredentials: Boolean(result.allow_credentials),
-    enabledServices: JSON.parse(result.enabled_services_json) as GatewayConfig["enabledServices"],
+    enabledServices,
     rateLimitPerMin: result.rate_limit_per_min,
     strictMode: Boolean(result.strict_mode),
     rewriteLocationHeaders: Boolean(result.rewrite_location_headers),
