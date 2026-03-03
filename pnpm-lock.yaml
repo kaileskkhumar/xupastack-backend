@@ -80,8 +80,8 @@ importers:
   packages/create-xupastack:
     dependencies:
       '@xupastack/shared':
-        specifier: workspace:*
-        version: link:../shared
+        specifier: ^0.1.0
+        version: 0.1.0
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -105,11 +105,11 @@ importers:
   packages/selfhost-template:
     dependencies:
       '@xupastack/shared':
-        specifier: workspace:*
-        version: link:../shared
+        specifier: ^0.1.0
+        version: 0.1.0
       '@xupastack/ui-embed':
-        specifier: workspace:*
-        version: link:../ui-embed
+        specifier: ^0.1.0
+        version: 0.1.0
       hono:
         specifier: ^4.3.5
         version: 4.12.3
@@ -1356,6 +1356,12 @@ packages:
 
   '@vitest/utils@2.1.9':
     resolution: {integrity: sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ==}
+
+  '@xupastack/shared@0.1.0':
+    resolution: {integrity: sha512-hxOa/dm1aoE62kOKTJZGqS8s/v8IjuozY8VG0AzNWGbXGDBM6ZWoy19JB7Gwr7g9sg06Z5/3zy+Ar0dnpiQ94g==}
+
+  '@xupastack/ui-embed@0.1.0':
+    resolution: {integrity: sha512-CZ/Y3TRnTdeEIwSPo96HcqZVHcj/WGh4MWtVTkhpIdaYQLuiGfpg4v+he6uVp+g8w50IDcCXccX1usiuLTg4Lw==}
 
   acorn-walk@8.3.2:
     resolution: {integrity: sha512-cjkyv4OtNCIeqhHrfS81QWXoCBPExR/J62oyEqepVw8WaQeSqpW2uhuLPh1m9eWhDuOo/jUXVTlifvesOWp/4A==}
@@ -3399,6 +3405,12 @@ snapshots:
       '@vitest/pretty-format': 2.1.9
       loupe: 3.2.1
       tinyrainbow: 1.2.0
+
+  '@xupastack/shared@0.1.0':
+    dependencies:
+      zod: 3.25.76
+
+  '@xupastack/ui-embed@0.1.0': {}
 
   acorn-walk@8.3.2: {}
 
