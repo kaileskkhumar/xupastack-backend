@@ -1,0 +1,34 @@
+name = "xupastack-gateway-managed"
+main = "src/index.ts"
+compatibility_date = "2024-05-24"
+compatibility_flags = ["nodejs_compat"]
+
+[[routes]]
+pattern = "*-gw.xupastack.com/*"
+zone_name = "xupastack.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "xupastack-db"
+database_id = "d92fe0d8-7820-4957-87d6-71371dcce0dc"
+
+[[kv_namespaces]]
+binding = "APP_CONFIG_CACHE"
+id = "cde934caf7b84df39fe37350315c6d41"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
+
+[[durable_objects.bindings]]
+name = "MONTHLY_CAP"
+class_name = "MonthlyCapDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiterDO", "MonthlyCapDO"]
+
+[vars]
+GLOBAL_CAP_PER_MONTH = "10000000"
+PER_APP_CAP_PER_MONTH = "100000"
+SELF_HOST_QUICKSTART_URL = "https://xupastack.com/quickstart"

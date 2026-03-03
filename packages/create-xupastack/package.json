@@ -1,0 +1,31 @@
+{
+  "name": "create-xupastack",
+  "version": "0.1.1",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "create-xupastack": "dist/index.js",
+    "xupastack": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no linter configured'",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@xupastack/shared": "^0.1.0",
+    "commander": "^12.1.0",
+    "ora": "^8.0.1",
+    "picocolors": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

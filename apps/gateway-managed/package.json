@@ -1,0 +1,26 @@
+{
+  "name": "@xupastack/gateway-managed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no linter configured'",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@xupastack/shared": "workspace:*",
+    "hono": "^4.3.5",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.0",
+    "@cloudflare/workers-types": "^4.20240524.0",
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.0",
+    "wrangler": "^3.60.0"
+  }
+}

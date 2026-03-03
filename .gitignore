@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+*.local
+.env
+.env.*
+!.env.example
+*.d.ts.map
+coverage/
+.changeset/*.md
+!.changeset/config.json

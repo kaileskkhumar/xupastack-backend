@@ -1,0 +1,31 @@
+name = "xupastack-api"
+main = "src/index.ts"
+compatibility_date = "2024-05-24"
+compatibility_flags = ["nodejs_compat"]
+
+[[routes]]
+pattern = "api.xupastack.com"
+custom_domain = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "xupastack-db"
+database_id = "d92fe0d8-7820-4957-87d6-71371dcce0dc"
+migrations_dir = "drizzle/migrations"
+
+[[kv_namespaces]]
+binding = "CONFIG_TOKENS"
+id = "9ae779c58ce74cbe85c0c8839bd123c0"
+
+# Secrets (set via: wrangler secret put <NAME>):
+#   GITHUB_CLIENT_ID
+#   GITHUB_CLIENT_SECRET
+#   SESSION_SECRET        – 32+ char random string for session signing
+#   EMAIL_PROVIDER_KEY    – Resend API key
+#   EMAIL_FROM            – e.g. "XupaStack <noreply@xupastack.com>"
+
+[vars]
+ENVIRONMENT = "production"
+CONSOLE_ORIGIN = "https://xupastack.com"
+API_BASE_URL = "https://api.xupastack.com"
+MANAGED_GW_BASE = "https://{slug}-gw.xupastack.com"
