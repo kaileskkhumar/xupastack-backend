@@ -13,7 +13,7 @@
   "dependencies": {
     "@xupastack/shared": "^0.1.0",
     "@xupastack/ui-embed": "^0.1.0",
-    "hono": "^4.3.5",
+    "hono": "^4.12.11",
     "zod": "^3.22.4"
   },
   "devDependencies": {
